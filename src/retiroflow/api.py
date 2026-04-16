@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,10 +14,27 @@ from .models import (
     Participant, Retreat, RetreatCenter, Review, SeasonalPricing, WellnessInsight,
 )
 
+
+async def _load_demo_if_empty():
+    try:
+        if not store.list_centers():
+            from . import demo_data
+            demo_data.seed_demo_data()
+    except Exception:
+        pass
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(_load_demo_if_empty())
+    yield
+
+
 app = FastAPI(
     title="RetiroFlow API",
     description="Wellness retreat management & booking for Oaxaca, Mexico",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
