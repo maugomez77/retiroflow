@@ -17,11 +17,12 @@ from .models import (
 
 async def _load_demo_if_empty():
     try:
-        if not store.list_centers():
+        if not store.get_collection("centers"):
             from . import demo_data
             demo_data.seed_demo_data()
-    except Exception:
-        pass
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
 
 
 @asynccontextmanager
