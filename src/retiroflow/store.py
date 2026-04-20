@@ -1,4 +1,9 @@
-"""RetiroFlow JSON store — hybrid persistence layer."""
+"""RetiroFlow persistence layer.
+
+Hybrid: Postgres JSONB blob when DATABASE_URL is set (Render), JSON file fallback
+for local dev / CLI. Render free tier has ephemeral disk — JSON would be wiped on
+every cold start, so production must use Postgres.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .database import KVStore, SessionLocal, is_db_enabled
 from .models import (
     Booking, Facilitator, LocalService, Participant, Retreat, RetreatCenter,
     Review, SeasonalPricing, WellnessInsight,
@@ -26,19 +32,44 @@ _MODEL_MAP: dict[str, type] = {
     "insights": WellnessInsight,
 }
 
+_KV_KEY = "main"
+
+
+def _empty_store() -> dict[str, list[dict]]:
+    return {k: [] for k in _MODEL_MAP}
+
 
 def _ensure_dir() -> None:
     STORE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def load_store() -> dict[str, list[dict]]:
+    if is_db_enabled():
+        with SessionLocal() as s:
+            row = s.get(KVStore, _KV_KEY)
+            if row and row.value:
+                return {**_empty_store(), **row.value}
+            return _empty_store()
     _ensure_dir()
     if STORE_FILE.exists():
         return json.loads(STORE_FILE.read_text())
-    return {k: [] for k in _MODEL_MAP}
+    return _empty_store()
 
 
 def save_store(data: dict[str, list[dict]]) -> None:
+    if is_db_enabled():
+        # Round-trip through JSON to coerce non-JSON-native types (e.g. datetimes)
+        # into primitives JSONB can store — mirrors the `default=str` used by the
+        # file backend.
+        coerced = json.loads(json.dumps(data, default=str))
+        with SessionLocal() as s:
+            row = s.get(KVStore, _KV_KEY)
+            if row:
+                row.value = coerced
+            else:
+                s.add(KVStore(key=_KV_KEY, value=coerced))
+            s.commit()
+        return
     _ensure_dir()
     STORE_FILE.write_text(json.dumps(data, indent=2, default=str))
 

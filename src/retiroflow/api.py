@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import ai, realtime, store
+from .database import init_db
 from .models import (
     Booking, BookingStatus, CenterType, Facilitator, LocalService,
     Participant, Retreat, RetreatCenter, Review, SeasonalPricing, WellnessInsight,
@@ -27,6 +28,7 @@ async def _load_demo_if_empty():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     asyncio.create_task(_load_demo_if_empty())
     yield
 
