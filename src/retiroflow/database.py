@@ -18,6 +18,12 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# Strip async/sync driver hints — this module uses the default sync driver (psycopg2)
+for _prefix in ("postgresql+asyncpg://", "postgresql+psycopg://", "postgresql+psycopg2://"):
+    if DATABASE_URL.startswith(_prefix):
+        DATABASE_URL = DATABASE_URL.replace(_prefix, "postgresql://", 1)
+        break
+
 engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False) if engine else None
 
